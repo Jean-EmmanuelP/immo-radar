@@ -1,25 +1,29 @@
-import { CITIES } from '@/lib/types';
 import CityPills from '@/components/CityPills';
 import DealsGrid from '@/components/DealsGrid';
 
+export const dynamic = 'force-dynamic';
+
 type Params = Promise<{ city: string }>;
 
-export function generateStaticParams() {
-  return CITIES.map((city) => ({ city: city.toLowerCase() }));
+function capitalizeCity(slug: string): string {
+  return slug
+    .split('-')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
 }
 
 export async function generateMetadata({ params }: { params: Params }) {
   const { city } = await params;
-  const displayName = city.charAt(0).toUpperCase() + city.slice(1);
+  const displayName = capitalizeCity(city);
   return {
     title: `${displayName} - Immo Radar`,
-    description: `Meilleures opportunites immobilieres a ${displayName}. Analyse prix vs marche DVF et rendement Airbnb.`,
+    description: `Meilleures opportunités immobilières à ${displayName}. Analyse prix vs marché DVF et rendement Airbnb.`,
   };
 }
 
 export default async function CityPage({ params }: { params: Params }) {
   const { city } = await params;
-  const displayName = city.charAt(0).toUpperCase() + city.slice(1);
+  const displayName = capitalizeCity(city);
 
   return (
     <main className="flex-1">
@@ -51,8 +55,8 @@ export default async function CityPage({ params }: { params: Params }) {
           {displayName}
         </h2>
         <p className="text-muted mb-6">
-          Opportunites immobilieres a {displayName} &mdash; decotes vs marche DVF
-          et rendement Airbnb estime.
+          Opportunités immobilières à {displayName} &mdash; décotes vs marché DVF
+          et rendement Airbnb estimé.
         </p>
         <CityPills activeCity={city} />
       </section>
@@ -65,7 +69,7 @@ export default async function CityPage({ params }: { params: Params }) {
       {/* Footer */}
       <footer className="border-t border-card-border py-6 mt-auto">
         <div className="max-w-7xl mx-auto px-4 text-center text-xs text-muted">
-          Immo Radar &mdash; Donnees DVF (open data), estimations Airbnb, annonces
+          Immo Radar &mdash; Données DVF (open data), estimations Airbnb, annonces
           via LinkUp.
         </div>
       </footer>

@@ -1,4 +1,4 @@
-import CityPills from '@/components/CityPills';
+import CitySearch from '@/components/CitySearch';
 import StatsBar from '@/components/StatsBar';
 import DealsGrid from '@/components/DealsGrid';
 
@@ -28,14 +28,14 @@ export default function Home() {
       {/* Hero */}
       <section className="max-w-7xl mx-auto px-4 pt-10 pb-6">
         <h2 className="text-3xl font-bold text-foreground mb-2">
-          Les meilleures opportunites immo en France
+          Les meilleures opportunités immo en France
         </h2>
         <p className="text-muted max-w-2xl mb-6">
-          Analyse en temps reel des annonces vs prix DVF du marche et rendement
-          Airbnb potentiel. Chaque bien est score automatiquement pour identifier
-          les meilleures decotes et les meilleurs rendements.
+          Analyse en temps réel des annonces vs prix DVF du marché et rendement
+          Airbnb potentiel. Chaque bien est scoré automatiquement pour identifier
+          les meilleures décotes et les meilleurs rendements.
         </p>
-        <CityPills />
+        <CitySearch />
       </section>
 
       {/* Stats */}
@@ -51,7 +51,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t border-card-border py-6 mt-auto">
         <div className="max-w-7xl mx-auto px-4 text-center text-xs text-muted">
-          Immo Radar &mdash; Donnees DVF (open data), estimations Airbnb, annonces
+          Immo Radar &mdash; Données DVF (open data), estimations Airbnb, annonces
           via LinkUp. Les informations sont indicatives et ne constituent pas un
           conseil en investissement.
         </div>

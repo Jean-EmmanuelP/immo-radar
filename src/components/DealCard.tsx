@@ -31,7 +31,33 @@ function ScoreBadge({ score }: { score: number }) {
   );
 }
 
+function StrategyBadge({ strategy }: { strategy: Deal['strategy'] }) {
+  const config = {
+    'achat-revente': {
+      label: 'Achat-revente',
+      className: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+    },
+    airbnb: {
+      label: 'Airbnb',
+      className: 'bg-pink-500/20 text-pink-400 border-pink-500/30',
+    },
+    mixte: {
+      label: 'Mixte',
+      className: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+    },
+  };
+  const { label, className } = config[strategy];
+
+  return (
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border ${className}`}>
+      {label}
+    </span>
+  );
+}
+
 export default function DealCard({ deal }: { deal: Deal }) {
+  const isRegulated = deal.strategy === 'achat-revente';
+
   return (
     <div className="bg-card-bg border border-card-border rounded-lg p-5 hover:border-accent-blue/40 transition-colors">
       {/* Header */}
@@ -44,6 +70,7 @@ export default function DealCard({ deal }: { deal: Deal }) {
             <span className="text-xs text-muted px-1.5 py-0.5 bg-card-border/50 rounded">
               {deal.source}
             </span>
+            <StrategyBadge strategy={deal.strategy} />
           </div>
           <p className="text-sm text-muted truncate">{deal.address}</p>
         </div>
@@ -54,7 +81,7 @@ export default function DealCard({ deal }: { deal: Deal }) {
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div>
           <p className="text-xs text-muted uppercase tracking-wide mb-0.5">
-            Prix demande
+            Prix demandé
           </p>
           <p className="text-lg font-bold font-mono text-foreground">
             {formatPrice(deal.askingPrice)}
@@ -65,7 +92,7 @@ export default function DealCard({ deal }: { deal: Deal }) {
         </div>
         <div>
           <p className="text-xs text-muted uppercase tracking-wide mb-0.5">
-            Valeur marche
+            Valeur marché
           </p>
           <p className="text-lg font-bold font-mono text-foreground/70">
             {formatPrice(deal.estimatedMarketValue)}
@@ -80,7 +107,7 @@ export default function DealCard({ deal }: { deal: Deal }) {
       <div className="grid grid-cols-3 gap-3 mb-4">
         {/* Discount */}
         <div className="bg-background/50 rounded-md p-2.5 text-center">
-          <p className="text-xs text-muted mb-0.5">Decote</p>
+          <p className="text-xs text-muted mb-0.5">Décote</p>
           <p
             className={`text-base font-bold font-mono ${
               deal.discount > 0 ? 'text-accent-green' : 'text-accent-red'
@@ -118,10 +145,38 @@ export default function DealCard({ deal }: { deal: Deal }) {
         </span>
       </div>
 
+      {/* Regulation warning */}
+      {isRegulated && (
+        <div className="flex items-center gap-1.5 text-xs text-accent-amber bg-accent-amber/10 border border-accent-amber/20 rounded-md px-2.5 py-1.5 mb-3">
+          <span>&#9888;</span>
+          <span>Réglementation stricte &mdash; location courte durée encadrée</span>
+        </div>
+      )}
+
       {/* Description */}
       <p className="text-sm text-muted/80 line-clamp-2 mb-3">
         {deal.description}
       </p>
+
+      {/* Contact info */}
+      {(deal.contactName || deal.contactPhone) && (
+        <div className="flex items-center gap-2 text-sm bg-accent-blue/10 border border-accent-blue/20 rounded-md px-3 py-2 mb-3">
+          <span className="text-accent-blue font-medium">
+            {deal.contactType === 'agence' ? 'Agence' : 'Particulier'}
+          </span>
+          {deal.contactName && (
+            <span className="text-foreground">{deal.contactName}</span>
+          )}
+          {deal.contactPhone && (
+            <a
+              href={`tel:${deal.contactPhone.replace(/\s/g, '')}`}
+              className="text-accent-green font-mono font-semibold hover:underline ml-auto"
+            >
+              {deal.contactPhone}
+            </a>
+          )}
+        </div>
+      )}
 
       {/* Footer */}
       <a

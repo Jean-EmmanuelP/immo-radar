@@ -1,3 +1,5 @@
+export type Strategy = 'achat-revente' | 'airbnb' | 'mixte';
+
 export interface Deal {
   id: string;
   city: string;
@@ -17,8 +19,13 @@ export interface Deal {
   sourceUrl: string;
   description: string;
   imageUrl?: string;
+  strategy: Strategy;
+  contactName?: string;
+  contactPhone?: string;
+  contactType?: 'agence' | 'particulier';
 }
 
+/** Popular cities for quick-access pills */
 export const CITIES = [
   'Paris',
   'Lyon',
@@ -30,6 +37,27 @@ export const CITIES = [
   'Strasbourg',
   'Montpellier',
   'Nice',
+  'Brest',
+  'Rennes',
+  'Angers',
+  'Tours',
+  'Grenoble',
+  'Toulon',
+  'Dijon',
+  'Rouen',
+  'Reims',
+  'Le Havre',
 ] as const;
 
-export type City = (typeof CITIES)[number];
+/** Cities where Airbnb short-term rental is heavily regulated */
+export const REGULATED_CITIES = [
+  'Paris',
+  'Lyon',
+  'Marseille',
+  'Bordeaux',
+  'Nice',
+  'Strasbourg',
+];
+
+/** Any city string is accepted */
+export type City = string;

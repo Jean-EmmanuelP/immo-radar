@@ -1,21 +1,30 @@
 import { NextResponse } from 'next/server';
-import { CITIES, type City } from '@/lib/types';
 import { scanCity } from '@/lib/scanner';
 import { replaceCityDeals, getDealsByCity } from '@/lib/deals-store';
+
+export const maxDuration = 120;
+
+function capitalizeCity(slug: string): string {
+  return slug
+    .split(/[\s-]+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const city = body.city as string;
+    const rawCity = (body.city as string)?.trim();
 
-    if (!city || !CITIES.includes(city as City)) {
+    if (!rawCity || rawCity.length === 0) {
       return NextResponse.json(
-        { error: `Invalid city. Must be one of: ${CITIES.join(', ')}` },
+        { error: 'City name is required (non-empty string).' },
         { status: 400 },
       );
     }
 
-    const deals = await scanCity(city as City);
+    const city = capitalizeCity(rawCity);
+    const deals = await scanCity(city);
 
     if (deals.length > 0) {
       replaceCityDeals(city, deals);

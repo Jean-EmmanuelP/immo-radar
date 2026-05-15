@@ -2,7 +2,7 @@
 
 const SORT_OPTIONS = [
   { value: 'score', label: 'Score' },
-  { value: 'discount', label: 'Decote' },
+  { value: 'discount', label: 'Décote' },
   { value: 'yield', label: 'Yield' },
   { value: 'price', label: 'Prix' },
 ] as const;

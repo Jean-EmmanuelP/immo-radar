@@ -36,9 +36,9 @@ export default function StatsBar() {
   return (
     <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
       {[
-        { label: 'Opportunites', value: String(deals.length), color: 'text-foreground' },
+        { label: 'Opportunités', value: String(deals.length), color: 'text-foreground' },
         { label: 'Villes', value: String(cities), color: 'text-accent-blue' },
-        { label: 'Decote moy.', value: `${avgDiscount}%`, color: 'text-accent-green' },
+        { label: 'Décote moy.', value: `${avgDiscount}%`, color: 'text-accent-green' },
         { label: 'Yield moy.', value: `${avgYield}%`, color: 'text-accent-amber' },
         { label: 'Meilleur score', value: String(bestScore), color: 'text-accent-green' },
       ].map((stat) => (

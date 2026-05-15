@@ -2,10 +2,9 @@
 // Persists only for the lifetime of the server process.
 
 import type { Deal } from './types';
-import { MOCK_DEALS } from './mock-data';
 
-// Start with mock data so the UI always shows something
-let deals: Deal[] = [...MOCK_DEALS];
+// Start empty — deals are populated by scanning
+let deals: Deal[] = [];
 
 export function getAllDeals(): Deal[] {
   return [...deals].sort((a, b) => b.score - a.score);

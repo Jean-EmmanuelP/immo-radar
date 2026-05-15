@@ -88,6 +88,30 @@ const AIRBNB_SCHEMA = {
   required: ['neighborhoods'],
 };
 
+/** Check if a URL points to an individual listing (not a search/category page) */
+function isValidListingUrl(url: string): boolean {
+  if (!url || url === '#') return false;
+  // SeLoger individual listing: ends with /XXXXXXXX.htm
+  if (/seloger\.com\/annonces\/.*\/\d+\.htm/.test(url)) return true;
+  // SeLogerNeuf program page
+  if (/selogerneuf\.com\/annonces\/.*\/\d+/.test(url)) return true;
+  // Leboncoin individual ad: /ad/ path
+  if (/leboncoin\.fr\/ad\//.test(url)) return true;
+  // Agency website with specific listing ID
+  if (/annonce[-_]\d+/.test(url)) return true;
+  // Any URL with a long numeric ID at the end (likely an individual listing)
+  if (/\/\d{6,}/.test(url)) return true;
+  // Reject known search/category patterns
+  if (/leboncoin\.fr\/ck\//.test(url)) return false;
+  if (/leboncoin\.fr\/cl\//.test(url)) return false;
+  if (/leboncoin\.fr\/boutique\//.test(url)) return false;
+  if (/leboncoin\.fr\/recherche\//.test(url)) return false;
+  if (/seloger\.com\/immobilier\//.test(url)) return false;
+  if (/seloger\.com\/recherche\//.test(url)) return false;
+  // Default: accept but flag as uncertain
+  return true;
+}
+
 /** Parse the sourcedAnswer text into listing objects */
 function parseListingsFromText(text: string): ParsedListing[] {
   const listings: ParsedListing[] = [];
@@ -111,9 +135,14 @@ function parseListingsFromText(text: string): ParsedListing[] {
       const roomsMatch = item.match(/(\d+)\s*pi[eè]ce/i) || item.match(/T(\d)/i);
       const rooms = roomsMatch ? parseInt(roomsMatch[1]) : 0;
 
-      // Extract URL
-      const urlMatch = item.match(/(https?:\/\/[^\s\]]+)/);
-      const url = urlMatch ? urlMatch[1].replace(/\[.*$/, '') : '#';
+      // Extract ALL URLs from the item, prefer valid listing URLs
+      const allUrls = [...item.matchAll(/(https?:\/\/[^\s\])]+)/g)]
+        .map((m) => m[1].replace(/\[.*$/, '').replace(/[.,;:]+$/, ''));
+
+      // Pick the best URL: prefer validated listing URLs
+      const validUrl = allUrls.find((u) => isValidListingUrl(u));
+      const url = validUrl || allUrls[0] || '#';
+      const hasDirectLink = validUrl ? isValidListingUrl(validUrl) : false;
 
       // Determine source from URL
       const source = url.includes('leboncoin') ? 'leboncoin' : url.includes('seloger') ? 'seloger' : 'autre';
@@ -165,7 +194,19 @@ export async function scanCity(city: string): Promise<Deal[]> {
     // 3. structured for Airbnb data
     const [listingsResult, dvfResult, airbnbResult] = await Promise.allSettled([
       linkupSourcedAnswer(
-        `Liste les 10 appartements actuellement a vendre a ${city} France sur seloger.com et leboncoin.fr. Pour chaque bien, indique: le quartier, le prix exact en euros, la surface en m2, le nombre de pieces, le nom de l agence ou si c est un particulier, et le lien URL direct vers l annonce. Trie par prix croissant.`,
+        `Liste les 10 appartements actuellement a vendre a ${city} France. Cherche sur seloger.com et leboncoin.fr les annonces individuelles (pas les pages de recherche).
+
+Pour chaque bien donne:
+- quartier ou adresse
+- prix exact en euros
+- surface en m2
+- nombre de pieces
+- nom de l agence immobiliere ou particulier
+- URL DIRECTE vers la page de l annonce individuelle (format seloger: /annonces/achat/.../XXXXXXXX.htm ou format leboncoin: /ad/ventes_immobilieres/XXXXXXXX)
+
+IMPORTANT: ne donne PAS d URL de pages de recherche ou de categories. Chaque URL doit pointer vers UNE SEULE annonce specifique.
+
+Trie par prix croissant.`,
       ),
       linkupStructured<{ neighborhoods: DVFData[] }>(
         `DVF Demandes de Valeurs Foncieres prix moyen au m2 par quartier a ${city} France transactions recentes 2024 2025. Donner le prix moyen au metre carre pour chaque quartier.`,
@@ -179,10 +220,34 @@ export async function scanCity(city: string): Promise<Deal[]> {
 
     // Parse listings from sourcedAnswer text
     let listings: ParsedListing[] = [];
+    let sourceUrls: string[] = [];
     if (listingsResult.status === 'fulfilled') {
-      const answer = (listingsResult.value as { answer?: string }).answer ||
-                     (typeof listingsResult.value === 'string' ? listingsResult.value : '');
+      const result = listingsResult.value as { answer?: string; sources?: Array<{ url: string }> };
+      const answer = result.answer || (typeof listingsResult.value === 'string' ? listingsResult.value : '');
       listings = parseListingsFromText(answer);
+
+      // Collect valid listing URLs from LinkUp sources
+      sourceUrls = (result.sources || [])
+        .map((s) => s.url)
+        .filter((u) => isValidListingUrl(u));
+
+      // Enrich listings: replace bad URLs with better ones from sources
+      for (const listing of listings) {
+        if (!isValidListingUrl(listing.url)) {
+          // Try to find a matching source URL (same site)
+          const sameSource = sourceUrls.find((su) => {
+            if (listing.source === 'seloger') return su.includes('seloger.com');
+            if (listing.source === 'leboncoin') return su.includes('leboncoin.fr');
+            return false;
+          });
+          if (sameSource) {
+            listing.url = sameSource;
+            // Remove used URL so we don't assign it twice
+            sourceUrls = sourceUrls.filter((u) => u !== sameSource);
+          }
+        }
+      }
+
       console.log(`[scanner] Parsed ${listings.length} listings for ${city} from sourcedAnswer`);
     } else {
       console.error(`[scanner] Listings search failed for ${city}:`, listingsResult.reason);

@@ -1,6 +1,7 @@
-// Scanner: uses LinkUp to find deals for a given city.
+// Scanner: uses LinkUp sourcedAnswer to find real deals for any city.
+// Parses the text response into Deal objects.
 
-import { linkupStructured, linkupSourcedAnswer } from './linkup';
+import { linkupSourcedAnswer, linkupStructured } from './linkup';
 import type { Deal, Strategy } from './types';
 import { REGULATED_CITIES } from './types';
 
@@ -8,7 +9,6 @@ function generateId(): string {
   return `deal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** Determine strategy based on city regulation status */
 function getStrategy(city: string): Strategy {
   const isRegulated = REGULATED_CITIES.some(
     (c) => c.toLowerCase() === city.toLowerCase(),
@@ -19,28 +19,13 @@ function getStrategy(city: string): Strategy {
 
 function computeScore(discount: number, annualYield: number, strategy: Strategy): number {
   if (strategy === 'achat-revente') {
-    // Heavily regulated city: 80% weight on discount, 20% on yield
     const discountScore = Math.min(Math.max(discount, 0) * 3.2, 80);
     const yieldScore = Math.min(annualYield * 2, 20);
     return Math.round(discountScore + yieldScore);
   }
-  // mixte: balanced 50/50
   const discountScore = Math.min(Math.max(discount, 0) * 2, 50);
   const yieldScore = Math.min(annualYield * 5, 50);
   return Math.round(discountScore + yieldScore);
-}
-
-interface PropertyListing {
-  address: string;
-  neighborhood: string;
-  price: number;
-  surface: number;
-  description: string;
-  source: string;
-  url: string;
-  contactName?: string;
-  contactPhone?: string;
-  contactType?: 'agence' | 'particulier';
 }
 
 interface DVFData {
@@ -53,31 +38,18 @@ interface AirbnbData {
   averageNightlyRate: number;
 }
 
-const PROPERTY_SCHEMA = {
-  type: 'object',
-  properties: {
-    listings: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          address: { type: 'string' },
-          neighborhood: { type: 'string' },
-          price: { type: 'number' },
-          surface: { type: 'number' },
-          description: { type: 'string' },
-          source: { type: 'string' },
-          url: { type: 'string' },
-          contactName: { type: 'string', description: 'Nom de l\'agence ou du vendeur particulier' },
-          contactPhone: { type: 'string', description: 'Numéro de téléphone affiché sur l\'annonce' },
-          contactType: { type: 'string', enum: ['agence', 'particulier'], description: 'Type de vendeur' },
-        },
-        required: ['address', 'neighborhood', 'price', 'surface', 'description', 'source', 'url'],
-      },
-    },
-  },
-  required: ['listings'],
-};
+interface ParsedListing {
+  address: string;
+  neighborhood: string;
+  price: number;
+  surface: number;
+  rooms: number;
+  description: string;
+  source: string;
+  url: string;
+  contactName: string;
+  contactType: 'agence' | 'particulier';
+}
 
 const DVF_SCHEMA = {
   type: 'object',
@@ -115,48 +87,124 @@ const AIRBNB_SCHEMA = {
   required: ['neighborhoods'],
 };
 
+/** Parse the sourcedAnswer text into listing objects */
+function parseListingsFromText(text: string): ParsedListing[] {
+  const listings: ParsedListing[] = [];
+
+  // Split by numbered items (1., 2., 3., etc.)
+  const items = text.split(/\n\d+\.\s+/).filter(Boolean);
+
+  for (const item of items) {
+    try {
+      // Extract price — look for patterns like 68 670 €, 57 000€, 186,375€
+      const priceMatch = item.match(/([\d\s,.]+)\s*€/);
+      if (!priceMatch) continue;
+      const price = parseFloat(priceMatch[1].replace(/\s/g, '').replace(',', '.'));
+      if (!price || price < 10000) continue;
+
+      // Extract surface — look for patterns like 17,9 m², 38 m², 54m2
+      const surfaceMatch = item.match(/([\d,.]+)\s*m[²2]/);
+      const surface = surfaceMatch ? parseFloat(surfaceMatch[1].replace(',', '.')) : 0;
+
+      // Extract rooms
+      const roomsMatch = item.match(/(\d+)\s*pi[eè]ce/i) || item.match(/T(\d)/i);
+      const rooms = roomsMatch ? parseInt(roomsMatch[1]) : 0;
+
+      // Extract URL
+      const urlMatch = item.match(/(https?:\/\/[^\s\]]+)/);
+      const url = urlMatch ? urlMatch[1].replace(/\[.*$/, '') : '#';
+
+      // Determine source from URL
+      const source = url.includes('leboncoin') ? 'leboncoin' : url.includes('seloger') ? 'seloger' : 'autre';
+
+      // Extract neighborhood/quartier
+      const quartierMatch = item.match(/quartier\s+([^,.\n]+)/i) || item.match(/secteur\s+([^,.\n]+)/i);
+      const neighborhood = quartierMatch ? quartierMatch[1].trim() : '';
+
+      // Extract contact/agence
+      const agenceMatch = item.match(/(?:agence|vendu par|vendeur|par)\s+(?:l'agence\s+)?([^,.(\n]+)/i)
+        || item.match(/(?:agence|cabinet)\s+([^,.(\n]+)/i);
+      const contactName = agenceMatch ? agenceMatch[1].trim() : '';
+      const contactType = contactName.toLowerCase().includes('particulier') ? 'particulier' as const : 'agence' as const;
+
+      // Build description from the full item text (cleaned up)
+      const description = item
+        .replace(/(https?:\/\/[^\s]+)/g, '')
+        .replace(/\[\d+\]/g, '')
+        .trim()
+        .slice(0, 200);
+
+      listings.push({
+        address: neighborhood ? `${neighborhood}` : 'Adresse non précisée',
+        neighborhood: neighborhood || 'Centre',
+        price,
+        surface: surface || 30, // default if not found
+        rooms,
+        description,
+        source,
+        url,
+        contactName,
+        contactType,
+      });
+    } catch {
+      // Skip unparseable items
+    }
+  }
+
+  return listings;
+}
+
 export async function scanCity(city: string): Promise<Deal[]> {
   const strategy = getStrategy(city);
 
   try {
-    // Run all 3 searches in parallel
-    const [propertiesResult, dvfResult, airbnbResult] = await Promise.allSettled([
-      linkupStructured<{ listings: PropertyListing[] }>(
-        `Annonces immobilières à vendre à ${city} France sur leboncoin.fr et seloger.com, appartements avec prix affiché, surface en m², adresse ou quartier. Inclure le nom et numéro de téléphone de l'agence ou du particulier vendeur quand disponible. Lister les 10 meilleures opportunités actuelles.`,
-        PROPERTY_SCHEMA,
+    // Run 3 searches in parallel:
+    // 1. sourcedAnswer for actual listings (this actually works!)
+    // 2. structured for DVF data
+    // 3. structured for Airbnb data
+    const [listingsResult, dvfResult, airbnbResult] = await Promise.allSettled([
+      linkupSourcedAnswer(
+        `Liste les 10 appartements actuellement a vendre a ${city} France sur seloger.com et leboncoin.fr. Pour chaque bien, indique: le quartier, le prix exact en euros, la surface en m2, le nombre de pieces, le nom de l agence ou si c est un particulier, et le lien URL direct vers l annonce. Trie par prix croissant.`,
       ),
       linkupStructured<{ neighborhoods: DVFData[] }>(
-        `DVF Demandes de Valeurs Foncières prix moyen au m² par quartier à ${city} France transactions récentes 2024 2025. Donner le prix moyen au mètre carré pour chaque quartier.`,
+        `DVF Demandes de Valeurs Foncieres prix moyen au m2 par quartier a ${city} France transactions recentes 2024 2025. Donner le prix moyen au metre carre pour chaque quartier.`,
         DVF_SCHEMA,
       ),
       linkupStructured<{ neighborhoods: AirbnbData[] }>(
-        `Tarif moyen nuitée Airbnb par quartier à ${city} France 2024 2025. Revenue location courte durée estimation par quartier.`,
+        `Tarif moyen nuitee Airbnb par quartier a ${city} France 2024 2025. Revenue location courte duree estimation par quartier.`,
         AIRBNB_SCHEMA,
       ),
     ]);
 
-    // Extract results with fallbacks
-    const listings: PropertyListing[] =
-      propertiesResult.status === 'fulfilled'
-        ? propertiesResult.value.data.listings ?? []
-        : [];
+    // Parse listings from sourcedAnswer text
+    let listings: ParsedListing[] = [];
+    if (listingsResult.status === 'fulfilled') {
+      const answer = (listingsResult.value as { answer?: string }).answer ||
+                     (typeof listingsResult.value === 'string' ? listingsResult.value : '');
+      listings = parseListingsFromText(answer);
+      console.log(`[scanner] Parsed ${listings.length} listings for ${city} from sourcedAnswer`);
+    } else {
+      console.error(`[scanner] Listings search failed for ${city}:`, listingsResult.reason);
+    }
 
+    // Extract DVF data
     const dvfData: DVFData[] =
       dvfResult.status === 'fulfilled'
         ? dvfResult.value.data.neighborhoods ?? []
         : [];
 
+    // Extract Airbnb data
     const airbnbData: AirbnbData[] =
       airbnbResult.status === 'fulfilled'
         ? airbnbResult.value.data.neighborhoods ?? []
         : [];
 
     if (listings.length === 0) {
-      console.log(`[scanner] No listings found for ${city}, using fallback sourced answer`);
-      return await scanCityFallback(city, strategy);
+      console.log(`[scanner] No listings parsed for ${city}`);
+      return [];
     }
 
-    // Build a lookup for DVF and Airbnb data by neighborhood
+    // Build lookup maps
     const dvfMap = new Map<string, number>();
     for (const d of dvfData) {
       dvfMap.set(d.neighborhood.toLowerCase(), d.averagePricePerSqm);
@@ -167,13 +215,13 @@ export async function scanCity(city: string): Promise<Deal[]> {
       airbnbMap.set(a.neighborhood.toLowerCase(), a.averageNightlyRate);
     }
 
-    // Default fallbacks per city if data is sparse
+    // Fallback averages
     const defaultDvf = dvfData.length > 0
       ? dvfData.reduce((sum, d) => sum + d.averagePricePerSqm, 0) / dvfData.length
-      : 5000;
+      : 3000; // conservative default
     const defaultAirbnb = airbnbData.length > 0
       ? airbnbData.reduce((sum, a) => sum + a.averageNightlyRate, 0) / airbnbData.length
-      : 80;
+      : 60;
 
     // Assemble deals
     const deals: Deal[] = listings
@@ -210,34 +258,18 @@ export async function scanCity(city: string): Promise<Deal[]> {
           airbnbMonthlyRevenue,
           airbnbAnnualYield,
           score,
-          source: listing.source || 'leboncoin',
+          source: listing.source || 'seloger',
           sourceUrl: listing.url || '#',
           description: listing.description || '',
           strategy,
           contactName: listing.contactName || undefined,
-          contactPhone: listing.contactPhone || undefined,
-          contactType: listing.contactType || undefined,
+          contactType: listing.contactName ? listing.contactType : undefined,
         };
       });
 
     return deals;
   } catch (error) {
     console.error(`[scanner] Error scanning ${city}:`, error);
-    return [];
-  }
-}
-
-// Fallback: use sourcedAnswer and parse manually
-async function scanCityFallback(city: string, strategy: Strategy): Promise<Deal[]> {
-  try {
-    const result = await linkupSourcedAnswer(
-      `Liste des appartements à vendre à ${city} France avec prix, surface, quartier. Inclure le prix moyen au m² DVF et le tarif Airbnb moyen du quartier. Format: adresse | prix | surface m² | prix DVF m² | tarif Airbnb nuit`,
-    );
-
-    // Best effort parse - return empty if parsing fails
-    console.log(`[scanner] Fallback sourced answer for ${city}:`, typeof result);
-    return [];
-  } catch {
     return [];
   }
 }

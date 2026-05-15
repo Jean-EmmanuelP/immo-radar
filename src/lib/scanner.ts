@@ -119,12 +119,12 @@ function parseListingsFromText(text: string): ParsedListing[] {
 
       // Extract neighborhood/quartier
       const quartierMatch = item.match(/quartier\s+([^,.\n]+)/i) || item.match(/secteur\s+([^,.\n]+)/i);
-      const neighborhood = quartierMatch ? quartierMatch[1].trim() : '';
+      const neighborhood = quartierMatch ? quartierMatch[1].trim().replace(/^:\s*/, '') : '';
 
       // Extract contact/agence
       const agenceMatch = item.match(/(?:agence|vendu par|vendeur|par)\s+(?:l'agence\s+)?([^,.(\n]+)/i)
         || item.match(/(?:agence|cabinet)\s+([^,.(\n]+)/i);
-      const contactName = agenceMatch ? agenceMatch[1].trim() : '';
+      const contactName = agenceMatch ? agenceMatch[1].trim().replace(/^:\s*/, '') : '';
       const contactType = contactName.toLowerCase().includes('particulier') ? 'particulier' as const : 'agence' as const;
 
       // Build description from the full item text (cleaned up)

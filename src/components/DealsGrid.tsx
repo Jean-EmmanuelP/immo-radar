@@ -78,20 +78,24 @@ export default function DealsGrid({ city }: { city?: string }) {
     });
   }, [fetchDeals, city]);
 
-  if (loading || scanning) {
+  if (scanning) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <div className="w-8 h-8 border-2 border-accent-blue/30 border-t-accent-blue rounded-full animate-spin mb-4" />
         <div className="text-muted">
-          {scanning
-            ? `Analyse en cours pour ${capitalizeCity(city || '')}...`
-            : 'Chargement des données...'}
+          Analyse en cours pour {capitalizeCity(city || '')}...
         </div>
-        {scanning && (
-          <p className="text-xs text-muted/60 mt-2">
-            3 recherches LinkUp en parallèle — environ 30 à 60 secondes
-          </p>
-        )}
+        <p className="text-xs text-muted/60 mt-2">
+          3 recherches LinkUp en parallèle — environ 30 à 60 secondes
+        </p>
+      </div>
+    );
+  }
+
+  if (loading && city) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-muted animate-pulse">Chargement...</div>
       </div>
     );
   }

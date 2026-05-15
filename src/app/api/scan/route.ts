@@ -32,10 +32,12 @@ export async function POST(request: Request) {
 
     const currentDeals = getDealsByCity(city);
 
+    // Return deals directly in response — don't rely on cross-instance /tmp
     return NextResponse.json({
       city,
+      deals: deals.length > 0 ? deals : currentDeals,
       scannedDeals: deals.length,
-      totalDeals: currentDeals.length,
+      totalDeals: (deals.length > 0 ? deals : currentDeals).length,
       message: deals.length > 0
         ? `Found ${deals.length} new deals for ${city}`
         : `No new deals found via LinkUp, showing ${currentDeals.length} cached deals`,

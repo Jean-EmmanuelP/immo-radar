@@ -12,10 +12,24 @@ function capitalizeCity(slug: string): string {
     .join(' ');
 }
 
-interface FetchResult {
-  deals: Deal[];
-  cacheFresh?: boolean;
-  cacheAge?: string | null;
+function sortDeals(deals: Deal[], sortBy: string): Deal[] {
+  const sorted = [...deals];
+  switch (sortBy) {
+    case 'discount':
+      sorted.sort((a, b) => b.discount - a.discount);
+      break;
+    case 'yield':
+      sorted.sort((a, b) => b.airbnbAnnualYield - a.airbnbAnnualYield);
+      break;
+    case 'price':
+      sorted.sort((a, b) => a.askingPrice - b.askingPrice);
+      break;
+    case 'score':
+    default:
+      sorted.sort((a, b) => b.score - a.score);
+      break;
+  }
+  return sorted;
 }
 
 export default function DealsGrid({ city }: { city?: string }) {
@@ -26,7 +40,7 @@ export default function DealsGrid({ city }: { city?: string }) {
   const [cacheAge, setCacheAge] = useState<string | null>(null);
   const autoScanned = useRef(false);
 
-  const fetchDeals = useCallback(async (): Promise<FetchResult> => {
+  const fetchDeals = useCallback(async () => {
     try {
       const params = new URLSearchParams({ sort });
       if (city) params.set('city', city);
@@ -37,46 +51,42 @@ export default function DealsGrid({ city }: { city?: string }) {
       return data;
     } catch (err) {
       console.error('Failed to fetch deals:', err);
-      return { deals: [] };
+      return { deals: [], cacheFresh: false };
     } finally {
       setLoading(false);
     }
   }, [city, sort]);
 
-  const handleScan = useCallback(async () => {
-    if (!city || scanning) return;
+  const doScan = useCallback(async () => {
+    if (!city) return;
     setScanning(true);
     try {
-      await fetch('/api/scan', {
+      const res = await fetch('/api/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ city: capitalizeCity(city) }),
       });
-      await fetchDeals();
+      const data = await res.json();
+      // Use deals directly from scan response (no cross-instance /tmp issue)
+      if (data.deals && data.deals.length > 0) {
+        setDeals(sortDeals(data.deals, sort));
+        setCacheAge('à l\'instant');
+      }
     } catch (err) {
       console.error('Scan failed:', err);
     } finally {
       setScanning(false);
     }
-  }, [city, scanning, fetchDeals]);
+  }, [city, sort]);
 
   useEffect(() => {
     fetchDeals().then((result) => {
-      // Only auto-scan if: on a city page, no cached deals, cache is NOT fresh, and haven't already tried
-      if (city && result.deals.length === 0 && !result.cacheFresh && !autoScanned.current) {
+      if (city && (!result.deals || result.deals.length === 0) && !result.cacheFresh && !autoScanned.current) {
         autoScanned.current = true;
-        setScanning(true);
-        fetch('/api/scan', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ city: capitalizeCity(city) }),
-        })
-          .then(() => fetchDeals())
-          .catch((err) => console.error('Auto-scan failed:', err))
-          .finally(() => setScanning(false));
+        doScan();
       }
     });
-  }, [fetchDeals, city]);
+  }, [fetchDeals, city, doScan]);
 
   if (scanning) {
     return (
@@ -118,7 +128,7 @@ export default function DealsGrid({ city }: { city?: string }) {
           )}
           {city && (
             <button
-              onClick={handleScan}
+              onClick={doScan}
               disabled={scanning}
               className="px-4 py-2 bg-accent-blue/20 text-accent-blue rounded-lg text-sm font-medium hover:bg-accent-blue/30 transition-colors disabled:opacity-50"
             >
@@ -132,7 +142,7 @@ export default function DealsGrid({ city }: { city?: string }) {
         <div className="text-center py-20">
           <p className="text-muted mb-2">Aucune opportunité trouvée.</p>
           {city && (
-            <button onClick={handleScan} className="text-accent-blue hover:underline">
+            <button onClick={doScan} className="text-accent-blue hover:underline">
               Lancer un scan
             </button>
           )}

@@ -14,6 +14,23 @@ function formatNumber(n: number): string {
   return new Intl.NumberFormat('fr-FR').format(n);
 }
 
+/** Check if URL points to a specific listing (not a search/category page) */
+function isDirectListing(url: string): boolean {
+  // SeLoger individual listings end with a number + .htm
+  if (/seloger\.com\/annonces\/.*\/\d+\.htm/.test(url)) return true;
+  // Leboncoin individual ads have /ad/ or numeric IDs
+  if (/leboncoin\.fr\/ad\//.test(url)) return true;
+  // Agency sites with specific listing IDs
+  if (/annonce-\d+/.test(url)) return true;
+  return false;
+}
+
+function getSourceLabel(url: string): string {
+  if (url.includes('leboncoin')) return 'Leboncoin';
+  if (url.includes('seloger')) return 'SeLoger';
+  try { return new URL(url).hostname.replace('www.', ''); } catch { return 'le site'; }
+}
+
 function ScoreBadge({ score }: { score: number }) {
   const bg =
     score >= 70
@@ -179,14 +196,18 @@ export default function DealCard({ deal }: { deal: Deal }) {
       )}
 
       {/* Footer */}
-      <a
-        href={deal.sourceUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center text-sm text-accent-blue hover:text-accent-blue/80 transition-colors"
-      >
-        Voir l&apos;annonce &rarr;
-      </a>
+      {deal.sourceUrl && deal.sourceUrl !== '#' && (
+        <a
+          href={deal.sourceUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center text-sm text-accent-blue hover:text-accent-blue/80 transition-colors"
+        >
+          {isDirectListing(deal.sourceUrl)
+            ? 'Voir l\u2019annonce \u2192'
+            : `Rechercher sur ${getSourceLabel(deal.sourceUrl)} \u2192`}
+        </a>
+      )}
     </div>
   );
 }

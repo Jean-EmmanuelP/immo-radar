@@ -12,24 +12,32 @@ function capitalizeCity(slug: string): string {
     .join(' ');
 }
 
+interface FetchResult {
+  deals: Deal[];
+  cacheFresh?: boolean;
+  cacheAge?: string | null;
+}
+
 export default function DealsGrid({ city }: { city?: string }) {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [sort, setSort] = useState('score');
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
+  const [cacheAge, setCacheAge] = useState<string | null>(null);
   const autoScanned = useRef(false);
 
-  const fetchDeals = useCallback(async () => {
+  const fetchDeals = useCallback(async (): Promise<FetchResult> => {
     try {
       const params = new URLSearchParams({ sort });
       if (city) params.set('city', city);
       const res = await fetch(`/api/deals?${params}`);
       const data = await res.json();
       setDeals(data.deals || []);
-      return data.deals || [];
+      setCacheAge(data.cacheAge || null);
+      return data;
     } catch (err) {
       console.error('Failed to fetch deals:', err);
-      return [];
+      return { deals: [] };
     } finally {
       setLoading(false);
     }
@@ -53,11 +61,10 @@ export default function DealsGrid({ city }: { city?: string }) {
   }, [city, scanning, fetchDeals]);
 
   useEffect(() => {
-    fetchDeals().then((fetched: Deal[]) => {
-      // Auto-scan on city page if no deals exist yet
-      if (city && fetched.length === 0 && !autoScanned.current) {
+    fetchDeals().then((result) => {
+      // Only auto-scan if: on a city page, no cached deals, cache is NOT fresh, and haven't already tried
+      if (city && result.deals.length === 0 && !result.cacheFresh && !autoScanned.current) {
         autoScanned.current = true;
-        // Trigger scan automatically
         setScanning(true);
         fetch('/api/scan', {
           method: 'POST',
@@ -75,11 +82,16 @@ export default function DealsGrid({ city }: { city?: string }) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <div className="w-8 h-8 border-2 border-accent-blue/30 border-t-accent-blue rounded-full animate-spin mb-4" />
-        <div className="text-muted animate-pulse">
+        <div className="text-muted">
           {scanning
-            ? `Analyse en cours pour ${capitalizeCity(city || '')}... (30-60 secondes)`
+            ? `Analyse en cours pour ${capitalizeCity(city || '')}...`
             : 'Chargement des données...'}
         </div>
+        {scanning && (
+          <p className="text-xs text-muted/60 mt-2">
+            3 recherches LinkUp en parallèle — environ 30 à 60 secondes
+          </p>
+        )}
       </div>
     );
   }
@@ -94,15 +106,22 @@ export default function DealsGrid({ city }: { city?: string }) {
           </p>
           <SortBar sort={sort} onSort={setSort} />
         </div>
-        {city && (
-          <button
-            onClick={handleScan}
-            disabled={scanning}
-            className="px-4 py-2 bg-accent-blue/20 text-accent-blue rounded-lg text-sm font-medium hover:bg-accent-blue/30 transition-colors disabled:opacity-50"
-          >
-            {scanning ? 'Scan en cours...' : 'Scanner LinkUp'}
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {cacheAge && (
+            <span className="text-xs text-muted/60">
+              Données : {cacheAge}
+            </span>
+          )}
+          {city && (
+            <button
+              onClick={handleScan}
+              disabled={scanning}
+              className="px-4 py-2 bg-accent-blue/20 text-accent-blue rounded-lg text-sm font-medium hover:bg-accent-blue/30 transition-colors disabled:opacity-50"
+            >
+              {scanning ? 'Scan en cours...' : 'Re-scanner'}
+            </button>
+          )}
+        </div>
       </div>
 
       {deals.length === 0 ? (

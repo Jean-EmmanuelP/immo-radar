@@ -20,7 +20,7 @@ export default function Home() {
             </div>
           </div>
           <div className="text-xs text-muted font-mono">
-            v1.0 &middot; LinkUp + DVF + Airbnb
+            LinkUp + DVF + Airbnb
           </div>
         </div>
       </header>
@@ -28,12 +28,12 @@ export default function Home() {
       {/* Hero */}
       <section className="max-w-7xl mx-auto px-4 pt-10 pb-6">
         <h2 className="text-3xl font-bold text-foreground mb-2">
-          Les meilleures opportunités immo en France
+          Trouvez les meilleures opportunités immobilières
         </h2>
         <p className="text-muted max-w-2xl mb-6">
-          Analyse en temps réel des annonces vs prix DVF du marché et rendement
-          Airbnb potentiel. Chaque bien est scoré automatiquement pour identifier
-          les meilleures décotes et les meilleurs rendements.
+          Entrez une ville pour lancer une analyse en temps réel : annonces vs
+          prix DVF du marché, rendement Airbnb potentiel, contact vendeur. Chaque
+          bien est scoré automatiquement. Données mises en cache 48h.
         </p>
         <CitySearch />
       </section>

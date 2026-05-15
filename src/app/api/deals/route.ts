@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAllDeals, getDealsByCity } from '@/lib/deals-store';
+import { getAllDeals, getDealsByCity, isCacheFresh, getCacheAge } from '@/lib/deals-store';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -8,7 +8,6 @@ export async function GET(request: Request) {
 
   let deals = city ? getDealsByCity(city) : getAllDeals();
 
-  // Sort
   switch (sortBy) {
     case 'discount':
       deals.sort((a, b) => b.discount - a.discount);
@@ -25,5 +24,10 @@ export async function GET(request: Request) {
       break;
   }
 
-  return NextResponse.json({ deals, count: deals.length });
+  return NextResponse.json({
+    deals,
+    count: deals.length,
+    cacheFresh: city ? isCacheFresh(city) : undefined,
+    cacheAge: city ? getCacheAge(city) : undefined,
+  });
 }

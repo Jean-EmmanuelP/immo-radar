@@ -194,19 +194,7 @@ export async function scanCity(city: string): Promise<Deal[]> {
     // 3. structured for Airbnb data
     const [listingsResult, dvfResult, airbnbResult] = await Promise.allSettled([
       linkupSourcedAnswer(
-        `Liste les 10 appartements actuellement a vendre a ${city} France. Cherche sur seloger.com et leboncoin.fr les annonces individuelles (pas les pages de recherche).
-
-Pour chaque bien donne:
-- quartier ou adresse
-- prix exact en euros
-- surface en m2
-- nombre de pieces
-- nom de l agence immobiliere ou particulier
-- URL DIRECTE vers la page de l annonce individuelle (format seloger: /annonces/achat/.../XXXXXXXX.htm ou format leboncoin: /ad/ventes_immobilieres/XXXXXXXX)
-
-IMPORTANT: ne donne PAS d URL de pages de recherche ou de categories. Chaque URL doit pointer vers UNE SEULE annonce specifique.
-
-Trie par prix croissant.`,
+        `Liste les 10 appartements actuellement a vendre a ${city} France sur seloger.com et leboncoin.fr. Pour chaque bien, indique: le quartier, le prix exact en euros, la surface en m2, le nombre de pieces, le nom de l agence ou si c est un particulier, et le lien URL direct vers l annonce. Trie par prix croissant.`,
       ),
       linkupStructured<{ neighborhoods: DVFData[] }>(
         `DVF Demandes de Valeurs Foncieres prix moyen au m2 par quartier a ${city} France transactions recentes 2024 2025. Donner le prix moyen au metre carre pour chaque quartier.`,

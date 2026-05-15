@@ -4,6 +4,7 @@
 import { linkupSourcedAnswer, linkupStructured } from './linkup';
 import type { Deal, Strategy } from './types';
 import { REGULATED_CITIES } from './types';
+import { computeFinancials, computeVerdict } from './financial';
 
 function generateId(): string {
   return `deal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -243,6 +244,15 @@ export async function scanCity(city: string): Promise<Deal[]> {
           Math.round(((airbnbMonthlyRevenue * 12) / listing.price) * 10000) / 100;
         const score = computeScore(Math.max(discount, 0), airbnbAnnualYield, strategy);
 
+        // Financial analysis
+        const isNeuf = listing.description.toLowerCase().includes('neuf') ||
+                       listing.url.includes('selogerneuf');
+        const financial = computeFinancials(
+          listing.price, listing.surface, city,
+          airbnbMonthlyRevenue, estimatedMarketValue, isNeuf,
+        );
+        const { verdict, reason: verdictReason } = computeVerdict(financial, Math.max(discount, 0), strategy);
+
         return {
           id: generateId(),
           city,
@@ -264,6 +274,9 @@ export async function scanCity(city: string): Promise<Deal[]> {
           strategy,
           contactName: listing.contactName || undefined,
           contactType: listing.contactName ? listing.contactType : undefined,
+          financial,
+          verdict,
+          verdictReason,
         };
       });
 

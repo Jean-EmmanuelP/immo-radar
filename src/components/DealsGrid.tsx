@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Deal } from '@/lib/types';
+import { getLocalDeals, setLocalDeals, getLocalCacheAge, getAllLocalDeals } from '@/lib/local-cache';
 import DealCard from './DealCard';
 import SortBar from './SortBar';
 
@@ -38,24 +39,19 @@ export default function DealsGrid({ city }: { city?: string }) {
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [cacheAge, setCacheAge] = useState<string | null>(null);
+  const [cacheSource, setCacheSource] = useState<'local' | 'server' | 'live' | null>(null);
   const autoScanned = useRef(false);
 
-  const fetchDeals = useCallback(async () => {
-    try {
-      const params = new URLSearchParams({ sort });
-      if (city) params.set('city', city);
-      const res = await fetch(`/api/deals?${params}`);
-      const data = await res.json();
-      setDeals(data.deals || []);
-      setCacheAge(data.cacheAge || null);
-      return data;
-    } catch (err) {
-      console.error('Failed to fetch deals:', err);
-      return { deals: [], cacheFresh: false };
-    } finally {
-      setLoading(false);
+  // Record visit for cron tracking
+  useEffect(() => {
+    if (city) {
+      fetch('/api/visit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ city: capitalizeCity(city) }),
+      }).catch(() => {});
     }
-  }, [city, sort]);
+  }, [city]);
 
   const doScan = useCallback(async () => {
     if (!city) return;
@@ -67,10 +63,13 @@ export default function DealsGrid({ city }: { city?: string }) {
         body: JSON.stringify({ city: capitalizeCity(city) }),
       });
       const data = await res.json();
-      // Use deals directly from scan response (no cross-instance /tmp issue)
       if (data.deals && data.deals.length > 0) {
-        setDeals(sortDeals(data.deals, sort));
+        const sorted = sortDeals(data.deals, sort);
+        setDeals(sorted);
         setCacheAge('à l\'instant');
+        setCacheSource('live');
+        // Save to localStorage for next visit
+        setLocalDeals(capitalizeCity(city), data.deals);
       }
     } catch (err) {
       console.error('Scan failed:', err);
@@ -80,13 +79,71 @@ export default function DealsGrid({ city }: { city?: string }) {
   }, [city, sort]);
 
   useEffect(() => {
-    fetchDeals().then((result) => {
-      if (city && (!result.deals || result.deals.length === 0) && !result.cacheFresh && !autoScanned.current) {
-        autoScanned.current = true;
-        doScan();
+    if (!city) {
+      // Homepage: show all locally cached deals
+      const localAll = getAllLocalDeals();
+      if (localAll.length > 0) {
+        setDeals(sortDeals(localAll, sort));
+        setCacheSource('local');
       }
-    });
-  }, [fetchDeals, city, doScan]);
+      setLoading(false);
+      return;
+    }
+
+    const cityName = capitalizeCity(city);
+
+    // Layer 1: localStorage — instant
+    const localDeals = getLocalDeals(cityName);
+    if (localDeals && localDeals.length > 0) {
+      setDeals(sortDeals(localDeals, sort));
+      setCacheAge(getLocalCacheAge(cityName));
+      setCacheSource('local');
+      setLoading(false);
+      // Still check server in background for fresher data
+      fetch(`/api/deals?city=${cityName}&sort=${sort}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.deals && data.deals.length > 0) {
+            setDeals(sortDeals(data.deals, sort));
+            setCacheAge(data.cacheAge || cacheAge);
+            setCacheSource('server');
+            setLocalDeals(cityName, data.deals);
+          }
+        })
+        .catch(() => {});
+      return;
+    }
+
+    // Layer 2: server cache
+    fetch(`/api/deals?city=${cityName}&sort=${sort}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.deals && data.deals.length > 0) {
+          setDeals(sortDeals(data.deals, sort));
+          setCacheAge(data.cacheAge || null);
+          setCacheSource('server');
+          setLocalDeals(cityName, data.deals);
+          setLoading(false);
+        } else if (!autoScanned.current) {
+          // Layer 3: fresh scan
+          autoScanned.current = true;
+          setLoading(false);
+          doScan();
+        } else {
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        // Server failed — try scan
+        if (!autoScanned.current) {
+          autoScanned.current = true;
+          setLoading(false);
+          doScan();
+        } else {
+          setLoading(false);
+        }
+      });
+  }, [city, sort, doScan]);
 
   if (scanning) {
     return (
@@ -123,7 +180,8 @@ export default function DealsGrid({ city }: { city?: string }) {
         <div className="flex items-center gap-3">
           {cacheAge && (
             <span className="text-xs text-muted/60">
-              Données : {cacheAge}
+              {cacheAge}
+              {cacheSource === 'local' && ' (cache local)'}
             </span>
           )}
           {city && (

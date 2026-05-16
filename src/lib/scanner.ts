@@ -91,7 +91,17 @@ const AIRBNB_SCHEMA = {
 /** Check if a URL points to an individual listing (not a search/category page) */
 function isValidListingUrl(url: string): boolean {
   if (!url || url === '#') return false;
-  // SeLoger individual listing: ends with /XXXXXXXX.htm
+  // Reject known search/category patterns FIRST
+  if (/leboncoin\.fr\/ck\//.test(url)) return false;
+  if (/leboncoin\.fr\/cl\//.test(url)) return false;
+  if (/leboncoin\.fr\/boutique\//.test(url)) return false;
+  if (/leboncoin\.fr\/recherche\//.test(url)) return false;
+  if (/leboncoin\.fr\/s\//.test(url)) return false;
+  if (/leboncoin\.fr\/l\//.test(url)) return false;
+  if (/immobilierneuf\.leboncoin\.fr/.test(url)) return false;
+  if (/seloger\.com\/immobilier\//.test(url)) return false;
+  if (/seloger\.com\/recherche\//.test(url)) return false;
+  // SeLoger individual listing
   if (/seloger\.com\/annonces\/.*\/\d+\.htm/.test(url)) return true;
   // SeLogerNeuf program page
   if (/selogerneuf\.com\/annonces\/.*\/\d+/.test(url)) return true;
@@ -101,13 +111,6 @@ function isValidListingUrl(url: string): boolean {
   if (/annonce[-_]\d+/.test(url)) return true;
   // Any URL with a long numeric ID at the end (likely an individual listing)
   if (/\/\d{6,}/.test(url)) return true;
-  // Reject known search/category patterns
-  if (/leboncoin\.fr\/ck\//.test(url)) return false;
-  if (/leboncoin\.fr\/cl\//.test(url)) return false;
-  if (/leboncoin\.fr\/boutique\//.test(url)) return false;
-  if (/leboncoin\.fr\/recherche\//.test(url)) return false;
-  if (/seloger\.com\/immobilier\//.test(url)) return false;
-  if (/seloger\.com\/recherche\//.test(url)) return false;
   // Default: accept but flag as uncertain
   return true;
 }

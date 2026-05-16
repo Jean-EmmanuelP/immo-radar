@@ -13,8 +13,9 @@ function fmtN(n: number): string {
 
 function isDirectListing(url: string): boolean {
   if (/seloger\.com\/annonces\/.*\/\d+\.htm/.test(url)) return true;
+  if (/selogerneuf\.com\/annonces\/.*\/\d+/.test(url)) return true;
   if (/leboncoin\.fr\/ad\//.test(url)) return true;
-  if (/annonce-\d+/.test(url)) return true;
+  if (/annonce[-_]\d+/.test(url)) return true;
   return false;
 }
 
